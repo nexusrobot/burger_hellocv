@@ -16,7 +16,7 @@ class ColorFinder:
         cx = 0
         cy = 0
         
-        if mom["m00"] > 1000000:
+        if mom["m00"] > thresh:
             if "m00" in mom and "m10" in mom and "m01" in mom and mom["m00"] <> 0:
                 cx = int(mom["m10"]/mom["m00"])
                 cy = int(mom["m01"]/mom["m00"])
@@ -74,7 +74,8 @@ class HelloCv:
                 bgr_image,
                 np.array([0, 50, 70]),
                 np.array([9, 255, 255]),
-                "red_image"
+                "red_image",
+                50000
                 )
 
         green_finder = ColorFinder(
