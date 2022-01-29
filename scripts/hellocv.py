@@ -6,9 +6,42 @@ from cv_bridge import CvBridge, CvBridgeError
 from sensor_msgs.msg import Image
 from std_msgs.msg import Int32MultiArray
 
+class ColorFinder:
+    def __init__(self,bgr_image,lower,upper):
+        hsv_image = cv2.cvtColor(bgr_image, cv2.COLOR_BGR2HSV)
+        mask_image = cv2.inRange(hsv_image, lower, upper)
+        processed_image = cv2.bitwise_and(bgr_image, bgr_image, mask=mask_image)
+
+        mom = cv2.moments(mask_image)
+        cx = 0
+        cy = 0
+        
+        if mom["m00"] > 1000000:
+            if "m00" in mom and "m10" in mom and "m01" in mom and mom["m00"] <> 0:
+                cx = int(mom["m10"]/mom["m00"])
+                cy = int(mom["m01"]/mom["m00"])
+        self.center = [cx,cy]
+        self.area = mom["m00"]
+
+        #marker point
+        color = (255, 0, 255)
+        processed_image = cv2.circle(processed_image, (cx,cy), 3, color, -1)
+
+        #publishing result image
+        self.bridge = CvBridge()
+        self.image_pub = rospy.Publisher('processed_image', Image, queue_size=10)
+        image_msg = self.bridge.cv2_to_imgmsg(processed_image, "bgr8")
+        self.image_pub.publish(image_msg)
+
+    def getCenter(self):
+        return self.center
+
+    def getArea(self):
+        return self.area
+
+
 class HelloCv:
     def __init__(self):
-        self.image_pub = rospy.Publisher('processed_image', Image, queue_size=10)
         self.yellow_center_pub = rospy.Publisher('yellow_center', Int32MultiArray, queue_size=10)
 
         cols = 640
@@ -26,34 +59,24 @@ class HelloCv:
     
     def execute(self):
         bgr_image = self.img
-        hsv_image = cv2.cvtColor(bgr_image, cv2.COLOR_BGR2HSV)
 
         lower = np.array([20,127,210])#yellow
         upper = np.array([35,255,255])#yellow
         #lower = np.array([40,100,50])#green
         #upper = np.array([60,255,255])#green
 
-        mask_image = cv2.inRange(hsv_image, lower, upper)
-        processed_image = cv2.bitwise_and(bgr_image, bgr_image, mask=mask_image)
+        yellow_finder = ColorFinder(
+                bgr_image,
+                np.array([20,127,210])
+                ,np.array([35,255,255])
+                )
 
-        mom = cv2.moments(mask_image)
-        cx = 0
-        cy = 0
-        #if mom["m00"] > 1000000:
-        if mom["m00"] > 1000:
-            if "m00" in mom and "m10" in mom and "m01" in mom and mom["m00"] <> 0:
-                cx = int(mom["m10"]/mom["m00"])
-                cy = int(mom["m01"]/mom["m00"])
-        rospy.loginfo("Area %f, xy(%d,%d)", mom["m00"],cx,cy)
-        center = [cx,cy]
-        yellow_center = Int32MultiArray(data=center)
+        ycen = yellow_finder.getCenter()
+        rospy.loginfo("Area %f, xy(%d,%d)", yellow_finder.getArea(), ycen[0],ycen[1])
+
+        yellow_center = Int32MultiArray(data=ycen)
         self.yellow_center_pub.publish(yellow_center)
 
-        color = (255, 0, 255)
-        processed_image = cv2.circle(processed_image, (cx, cy), 3, color, -1)
-
-        image_msg = self.bridge.cv2_to_imgmsg(processed_image, "bgr8")
-        self.image_pub.publish(image_msg)
 
 
 if __name__ == '__main__':
