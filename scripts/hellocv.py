@@ -7,7 +7,7 @@ from sensor_msgs.msg import Image
 from std_msgs.msg import Int32MultiArray
 
 class ColorFinder:
-    def __init__(self,bgr_image,lower,upper):
+    def __init__(self,bgr_image,lower,upper,publish_name,thresh=1000000):
         hsv_image = cv2.cvtColor(bgr_image, cv2.COLOR_BGR2HSV)
         mask_image = cv2.inRange(hsv_image, lower, upper)
         processed_image = cv2.bitwise_and(bgr_image, bgr_image, mask=mask_image)
@@ -22,6 +22,7 @@ class ColorFinder:
                 cy = int(mom["m01"]/mom["m00"])
         self.center = [cx,cy]
         self.area = mom["m00"]
+        rospy.loginfo("%s Area %f, xy(%d,%d)", publish_name,self.area, cx,cy)
 
         #marker point
         color = (255, 0, 255)
@@ -29,7 +30,7 @@ class ColorFinder:
 
         #publishing result image
         self.bridge = CvBridge()
-        self.image_pub = rospy.Publisher('processed_image', Image, queue_size=10)
+        self.image_pub = rospy.Publisher(publish_name, Image, queue_size=10)
         image_msg = self.bridge.cv2_to_imgmsg(processed_image, "bgr8")
         self.image_pub.publish(image_msg)
 
@@ -43,6 +44,8 @@ class ColorFinder:
 class HelloCv:
     def __init__(self):
         self.yellow_center_pub = rospy.Publisher('yellow_center', Int32MultiArray, queue_size=10)
+        self.red_center_pub    = rospy.Publisher('red_center', Int32MultiArray, queue_size=10)
+        self.green_center_pub  = rospy.Publisher('green_center', Int32MultiArray, queue_size=10)
 
         cols = 640
         rows = 480
@@ -60,22 +63,38 @@ class HelloCv:
     def execute(self):
         bgr_image = self.img
 
-        lower = np.array([20,127,210])#yellow
-        upper = np.array([35,255,255])#yellow
-        #lower = np.array([40,100,50])#green
-        #upper = np.array([60,255,255])#green
-
         yellow_finder = ColorFinder(
                 bgr_image,
-                np.array([20,127,210])
-                ,np.array([35,255,255])
+                np.array([20,127,210]),
+                np.array([35,255,255]),
+                "yellow_image"
+                )
+
+        red_finder = ColorFinder(
+                bgr_image,
+                np.array([0, 50, 70]),
+                np.array([9, 255, 255]),
+                "red_image"
+                )
+
+        green_finder = ColorFinder(
+                bgr_image,
+                np.array([40,100,50]),
+                np.array([60,255,255]),
+                "green_image"
                 )
 
         ycen = yellow_finder.getCenter()
-        rospy.loginfo("Area %f, xy(%d,%d)", yellow_finder.getArea(), ycen[0],ycen[1])
+        rcen = red_finder.getCenter()
+        gcen = green_finder.getCenter()
 
         yellow_center = Int32MultiArray(data=ycen)
+        red_center = Int32MultiArray(data=rcen)
+        green_center = Int32MultiArray(data=gcen)
+
         self.yellow_center_pub.publish(yellow_center)
+        self.red_center_pub.publish(red_center)
+        self.green_center_pub.publish(green_center)
 
 
 
